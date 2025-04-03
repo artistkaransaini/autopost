@@ -3,7 +3,6 @@ import requests
 import random
 import tweepy
 
-
 PROMPT = os.environ.get('PROMPT', '')
 PROMPT_X = os.environ.get('PROMPT_X', '')
 API_KEY = os.environ.get('GOOGLE_API_KEY', '')
@@ -43,7 +42,7 @@ def get_ai_data(prompt):
         print(f"Error {response.status_code}")
 
 def get_linkedin_userinfo(access_token):
-    url = "https://api.linkedin.com/v2/userinfo"
+    url = "https://api.linkedin.com/v2/me"
     headers = {
         'Authorization': f'Bearer {access_token}'
     }
@@ -56,27 +55,63 @@ def get_linkedin_userinfo(access_token):
         print(f"Error fetching user info: {response.status_code}")
         return None
 
-def get_linkedin_urn(access_token):
-    url = "https://api.linkedin.com/v2/me"
+def upload_image_to_linkedin(access_token, image_url):
+    """Upload an image to LinkedIn and return the media URL."""
+    media_upload_url = "https://api.linkedin.com/v2/assets?action=registerUpload"
     headers = {
-        'Authorization': f'Bearer {access_token}'
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json'
     }
-    response = requests.get(url, headers=headers)
+    
+    # Prepare the metadata for the image upload
+    metadata = {
+        "registerUploadRequest": {
+            "owner": "urn:li:person:me",  # 'me' to refer to the authenticated user
+            "mediaType": "image/jpeg",
+            "title": "Art Image"
+        }
+    }
+
+    response = requests.post(media_upload_url, headers=headers, json=metadata)
 
     if response.status_code == 200:
-        profile_data = response.json()
-        return profile_data.get('id')  
+        upload_info = response.json()
+        # Get the upload URL from the response
+        upload_url = upload_info['value']['uploadUrl']
+        
+        # Upload the image to the returned URL
+        image_data = requests.get(image_url).content
+        image_upload_response = requests.put(upload_url, data=image_data)
+        
+        if image_upload_response.status_code == 201:
+            media_url = upload_info['value']['asset']  # This is the media URL you can use
+            return media_url
+        else:
+            print(f"Error uploading image: {image_upload_response.status_code}")
     else:
-        print(f"Error fetching LinkedIn URN: {response.status_code}")
-        return None
+        print(f"Error registering upload: {response.status_code}")
+    return None
 
 def post_to_linkedin(access_token, text_content):
     user_data = get_linkedin_userinfo(access_token)
-    if not user_data or 'sub' not in user_data:
+    if not user_data:
         print("Failed to retrieve user data.")
         return
 
-    member_id = user_data['sub']
+    # The Person URN for the authenticated user is available as 'id' from the `/me` endpoint
+    member_id = user_data['id']
+    
+    # Pick a random number between 1 and 50 for the image
+    image_number = random.randint(1, 50)
+    image_url = f"https://raw.githubusercontent.com/artistkaransaini/autopost/main/art/art1.jpg"  # GitHub image URL {image_number}
+    
+    # Step 1: Upload the image to LinkedIn's media service
+    media_url = upload_image_to_linkedin(access_token, image_url)
+    if not media_url:
+        print("Error uploading image.")
+        return
+
+    # Step 2: Create the post with image URL
     url = "https://api.linkedin.com/v2/ugcPosts"
     headers = {
         'Authorization': f'Bearer {access_token}',
@@ -92,7 +127,16 @@ def post_to_linkedin(access_token, text_content):
                 "shareCommentary": {
                     "text": text_content
                 },
-                "shareMediaCategory": "NONE"
+                "shareMediaCategory": "IMAGE",
+                "media": [
+                    {
+                        "status": "READY",
+                        "media": media_url,
+                        "title": {
+                            "text": "Art Image"
+                        }
+                    }
+                ]
             }
         },
         "visibility": {
@@ -102,12 +146,13 @@ def post_to_linkedin(access_token, text_content):
 
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 201:
-        print("Successfully posted to LinkedIn!")
+        print("Successfully posted to LinkedIn with image!")
         return response.json()
     else:
         print(f"Error posting to LinkedIn: {response.status_code}")
         print(response.text)
         return None
+
 def post_tweet(text):    
     # Initialize client with credentials (Twitter API v2)
     client = tweepy.Client(
@@ -126,7 +171,7 @@ def post_tweet(text):
 
 def should_post():
     # 2 posts out of 12 attempts (twice a day)
-    return random.randint(1, 12) <= 2
+    return random.randint(1, 2) <= 2
 
 def main():
     if should_post():
@@ -145,4 +190,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
