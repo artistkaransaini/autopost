@@ -39,7 +39,8 @@ def get_ai_data(prompt):
         return None
 
 def get_linkedin_userinfo(access_token):
-    info_url = "https://api.linkedin.com/v2/me"
+    # Use the OAuth2 userinfo endpoint which returns the "sub" (subject) field.
+    info_url = "https://api.linkedin.com/v2/userinfo"
     headers = {'Authorization': f'Bearer {access_token}'}
     response = requests.get(info_url, headers=headers)
     if response.status_code == 200:
@@ -95,16 +96,16 @@ def upload_image_to_linkedin(access_token, image_url, owner):
 
 def post_to_linkedin(access_token, text_content):
     user_info = get_linkedin_userinfo(access_token)
-    if not user_info or 'id' not in user_info:
+    if not user_info or 'sub' not in user_info:
         print("Failed to retrieve LinkedIn user info.")
         return None
 
-    member_id = user_info['id']
+    member_id = user_info['sub']
     owner = f"urn:li:person:{member_id}"
     print("Posting as LinkedIn member ID:", member_id)
 
     # Pick a random image from GitHub (absolute URL)
-    image_num = 1 #random.randint(1, 20)
+    image_num = random.randint(1, 20)
     github_image_url = f"https://raw.githubusercontent.com/artistkaransaini/autopost/main/art/art{image_num}.jpg"
     print("Using image URL:", github_image_url)
 
@@ -173,7 +174,7 @@ def post_tweet(text):
     return response
 
 def should_post():
-    # Change this logic as needed; currently about 50% chance for either platform.
+    # Approximately 50% chance for either platform.
     return random.randint(1, 2) == 1
 
 def main():
