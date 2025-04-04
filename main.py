@@ -55,59 +55,44 @@ def get_linkedin_userinfo(access_token):
         print(f"Error fetching user info: {response.status_code}")
         return None
 
-def get_linkedin_urn(access_token):
-    url = "https://api.linkedin.com/v2/me"
-    headers = {
-        'Authorization': f'Bearer {access_token}'
-    }
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        profile_data = response.json()
-        return profile_data.get('id')  
-    else:
-        print(f"Error fetching LinkedIn URN: {response.status_code}")
-        return None
-
-def upload_linkedin_image(access_token, member_id, image_path):
-    # Register the image upload with LinkedIn
+def upload_image_to_linkedin(access_token, image_url):
+    # Step 1: Register upload
     register_url = "https://api.linkedin.com/v2/assets?action=registerUpload"
     headers = {
         'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0'
     }
-    payload = {
+
+    image_register_payload = {
         "registerUploadRequest": {
-            "owner": f"urn:li:person:{member_id}",
             "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
+            "owner": f"urn:li:person:{get_linkedin_userinfo(access_token)['sub']}",
             "serviceRelationships": [
                 {
                     "relationshipType": "OWNER",
                     "identifier": "urn:li:userGeneratedContent"
                 }
-            ],
-            "supportedUploadMechanism": ["SYNCHRONOUS_UPLOAD"]
+            ]
         }
     }
-    reg_response = requests.post(register_url, headers=headers, json=payload)
-    if reg_response.status_code != 200:
-        print("Error registering image upload:", reg_response.status_code)
-        return None
-    reg_data = reg_response.json()
-    upload_url = reg_data['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl']
-    asset = reg_data['value']['asset']
 
-    # Upload the image file to the provided URL
-    with open(image_path, 'rb') as f:
-        image_data = f.read()
-    upload_headers = {
-        'Authorization': f'Bearer {access_token}',
-        'Content-Type': 'application/octet-stream'
-    }
-    upload_response = requests.put(upload_url, data=image_data, headers=upload_headers)
-    if upload_response.status_code not in [200, 201]:
-        print("Error uploading image:", upload_response.status_code)
+    reg_response = requests.post(register_url, headers=headers, json=image_register_payload)
+
+    if reg_response.status_code != 200:
+        print(f"Error registering image: {reg_response.status_code}")
         return None
+
+    upload_url = reg_response.json()['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl']
+    asset = reg_response.json()['value']['asset']
+
+    # Step 2: Upload actual image bytes
+    img_bytes = requests.get(image_url).content
+    upload_response = requests.put(upload_url, data=img_bytes, headers={'Authorization': f'Bearer {access_token}'})
+    if upload_response.status_code != 201 and upload_response.status_code != 200:
+        print(f"Image upload failed: {upload_response.status_code}")
+        return None
+
     return asset
 
 def post_to_linkedin(access_token, text_content):
@@ -117,69 +102,54 @@ def post_to_linkedin(access_token, text_content):
         return
 
     member_id = user_data['sub']
-    
-    # Pick a random image between 1 and 20 from the local art folder (from the GitHub repo artistkaransaini/autopost)
-    image_number = random.randint(1, 20)
-    image_path = f"./art/art{image_number}.jpg"
-    
-    # Upload the image and retrieve the asset URN
-    asset = upload_linkedin_image(access_token, member_id, image_path)
-    if not asset:
-        print("Image upload failed. Proceeding without image.")
-    
+    # Random image number
+    image_num = 1 # random.randint(1, 20)
+    github_image_url = f"https://raw.githubusercontent.com/artistkaransaini/autopost/main/art/art{image_num}.jpg"
+
+    # Upload image to LinkedIn
+    asset_urn = upload_image_to_linkedin(access_token, github_image_url)
+    if not asset_urn:
+        print("Image upload failed, posting without image.")
+        return None
+
     url = "https://api.linkedin.com/v2/ugcPosts"
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json',
         'X-Restli-Protocol-Version': '2.0.0'
     }
-    
-    # If the asset upload succeeded, attach the image; otherwise, post text-only.
-    if asset:
-        payload = {
-            "author": f"urn:li:person:{member_id}",
-            "lifecycleState": "PUBLISHED",
-            "specificContent": {
-                "com.linkedin.ugc.ShareContent": {
-                    "shareCommentary": {
-                        "text": text_content
-                    },
-                    "shareMediaCategory": "IMAGE",
-                    "media": [
-                        {
-                            "status": "READY",
-                            "media": asset,
-                            "title": {
-                                "text": "Image Post"
-                            }
+
+    payload = {
+        "author": f"urn:li:person:{member_id}",
+        "lifecycleState": "PUBLISHED",
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary": {
+                    "text": text_content
+                },
+                "shareMediaCategory": "IMAGE",
+                "media": [
+                    {
+                        "status": "READY",
+                        "description": {
+                            "text": "Auto-generated artwork from GitHub"
+                        },
+                        "media": asset_urn,
+                        "title": {
+                            "text": f"Artwork #{image_num}"
                         }
-                    ]
-                }
-            },
-            "visibility": {
-                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+                    }
+                ]
             }
+        },
+        "visibility": {
+            "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
         }
-    else:
-        payload = {
-            "author": f"urn:li:person:{member_id}",
-            "lifecycleState": "PUBLISHED",
-            "specificContent": {
-                "com.linkedin.ugc.ShareContent": {
-                    "shareCommentary": {
-                        "text": text_content
-                    },
-                    "shareMediaCategory": "NONE"
-                }
-            },
-            "visibility": {
-                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-            }
-        }
-    
+    }
+
     response = requests.post(url, headers=headers, json=payload)
     if response.status_code == 201:
-        print("Successfully posted to LinkedIn with image!" if asset else "Successfully posted to LinkedIn without image!")
+        print("Successfully posted to LinkedIn with image!")
         return response.json()
     else:
         print(f"Error posting to LinkedIn: {response.status_code}")
@@ -187,7 +157,6 @@ def post_to_linkedin(access_token, text_content):
         return None
 
 def post_tweet(text):    
-    # Initialize client with credentials (Twitter API v2)
     client = tweepy.Client(
         bearer_token=bearer_token,
         consumer_key=consumer_key,
@@ -196,28 +165,26 @@ def post_tweet(text):
         access_token_secret=access_token_secret
     )
     
-    # Post the tweet
     response = client.create_tweet(text=text)
     print(f"Tweet posted successfully!")
     return response
 
 def should_post():
-    # 2 posts out of 12 attempts (twice a day)
     return random.randint(1, 2) <= 2
 
 def main():
     if should_post():
-        print("Proceeding to post on LinkedIn with a dash of visual flair...")
+        print("Proceeding to post on LinkedIn...")
         text_content = get_ai_data(PROMPT)
         result = post_to_linkedin(ACCESS_TOKEN, text_content)
         if result:
-            print("LinkedIn post successful!")
+            print("Post to linkedin successful!")
         else:
-            print("Failed to post to LinkedIn.")
+            print("Failed to post to linkedin.")
     else:
         tweet_text = get_ai_data(PROMPT_X)
         resultX = post_tweet(tweet_text)
-        print("Skipping LinkedIn post this run. Twitter, you're up next!")
+        print("Skipping this run. Will try again later.")
 
 if __name__ == "__main__":
     main()
