@@ -16,6 +16,7 @@ consumer_key = os.environ.get('X_API_KEY', '')
 consumer_secret = os.environ.get('X_API_SECRET', '')
 access_token_twitter = os.environ.get('X_ACCESS_TOKEN', '')
 access_token_secret = os.environ.get('X_ACCESS_SECRET', '')
+ART_NUM = int(os.environ.get('ART_NUM', ''))
 
 def get_ai_data(prompt):
     payload = {
@@ -105,7 +106,7 @@ def post_to_linkedin(access_token, text_content):
     print("Posting as LinkedIn member ID:", member_id)
 
     # Pick a random image from GitHub (absolute URL)
-    image_num = 1#random.randint(1, 20)
+    image_num = random.randint(1, ART_NUM)
     github_image_url = f"https://raw.githubusercontent.com/artistkaransaini/autopost/void/art/art{image_num}.jpg"
     print("Using image URL:", github_image_url)
 
