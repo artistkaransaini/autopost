@@ -1,5 +1,5 @@
-Upload the photos of artwork in the art folder.
-They must be JPG extention.
+Upload the photos of artwork in the art folder. (click on art folder, then click on Add file in upper right. Make sure to rename the photo according to instructions below)
+They MUST be .jpg extention.
 
 Replace the Linkedin API key every two month. (Current -  April 1)
 
