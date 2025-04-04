@@ -105,7 +105,7 @@ def post_to_linkedin(access_token, text_content):
     print("Posting as LinkedIn member ID:", member_id)
 
     # Pick a random image from GitHub (absolute URL)
-    image_num = random.randint(1, 20)
+    image_num = 1#random.randint(1, 20)
     github_image_url = f"https://raw.githubusercontent.com/artistkaransaini/autopost/main/art/art{image_num}.jpg"
     print("Using image URL:", github_image_url)
 
