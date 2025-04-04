@@ -36,5 +36,6 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+          ART_NUM: ${{ secrets.ART_NUM }}
           NOTIFICATION_EMAIL: ${{ secrets.NOTIFICATION_EMAIL }}
 
