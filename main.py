@@ -175,8 +175,8 @@ def post_tweet(text):
     return response
 
 def should_post():
-    # Approximately 16.6% chance for linkedin platform.
-    return random.randint(1, 12) <= 2
+    # Approximately 29% chance for linkedin platform. AKA 5 out of 17.
+     return random.random() < 0.3
 
 def main():
     if should_post():
